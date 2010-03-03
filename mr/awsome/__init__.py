@@ -63,6 +63,15 @@ class Config(dict):
             volumes.append((volume[0], volume[1]))
         return tuple(volumes)
 
+    def massage_instance_snapshots(self, value):
+        snapshots = []
+        for line in value.split('\n'):
+            snapshot = line.split()
+            if not len(snapshot):
+                continue
+            snapshots.append((snapshot[0], int(snapshot[1]), snapshot[2], snapshot[3]))
+        return tuple(snapshots)
+        
     def massage_securitygroup_connections(self, value):
         connections = []
         for line in value.split('\n'):
@@ -296,7 +305,16 @@ class Server(object):
             if volume.attachment_state() == 'attached':
                 continue
             log.info("Attaching storage (%s on %s)" % (volume_id, device))
-            self.conn.attach_volume(volume_id, instance.id, device)
+            self.conn.attach_volume(volume_id, instance.id, device) 
+            
+        for snapshot_id, size, zone, device in self.config.get('snapshots', []):
+            log.info("Creating volume from snapshot: %s" % snapshot_id)
+            volume = self.conn.create_volume(size, zone, snapshot_id)
+            if volume.attachment_state() == 'attached':
+                continue
+            log.info("Attaching storage (%s on %s)" % (volume.id, device))
+            self.conn.attach_volume(volume.id, instance.id, device)
+                        
         return instance
 
     def init_ssh_key(self, user=None):
